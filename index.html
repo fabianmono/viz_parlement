@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<style>
+
+body {
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  margin: auto;
+  position: relative;
+  width: 800px;
+}
+
+form {
+  position: absolute;
+  right: 10px;
+  top: 10px;
+}
+.legend {
+    font-size: 12px;
+  }
+  rect {
+    stroke-width: 2;
+  }
+
+
+</style>
+<form>
+  <label><input type="radio" name="dataset" value="sex" checked> Sexe</label>
+  <label><input type="radio" name="dataset" value="age"> Age</label>
+  <label><input type="radio" name="dataset" value="lang"> Langue</label>
+</form>
+<script src="http://d3js.org/d3.v3.min.js"></script>
+<script>
+
+var width = 800,
+    height = 500,
+    radius = Math.min(width, height) / 2;
+
+var color = d3.scale.category20();
+
+var pie = d3.layout.pie()
+    .value(function(d) { return d.sex_pop; })
+	.startAngle([-0.5*Math.PI])
+	.endAngle([0.5*Math.PI])
+    .sort(null);
+
+var pie_par = d3.layout.pie()
+    .value(function(d) { return d.sex_parlement; })
+	.startAngle([-0.5*Math.PI])
+	.endAngle([0.5*Math.PI])
+    .sort(null);
+
+var arc = d3.svg.arc()
+    .innerRadius(150)
+    .outerRadius(230);
+
+var arc_par = d3.svg.arc()
+    .innerRadius(130)
+    .outerRadius(50);
+
+var svg = d3.select("body").append("svg")
+    .attr("width", width)
+    .attr("height", height)
+  .append("g")
+    .attr("transform", "translate(" + width / 2 + "," + ((height / 2) + 150) + ")");
+
+svg.append('text').attr('x', 0).attr('y',  - height / 2 - 100).attr('class', 'titre').style("font-size","20px").style("text-anchor", "middle").attr("dy", "1em").text("Représentation démocratique au Parlement Suisse");
+svg.append('text').attr('x', 150).attr('y', +10).attr('class', 'explanation').style("font-size","10px").attr("dy", "1em").text("Passez la souris sur le graphique pour avoir des details").call(wrap, 250);
+svg.append('text').attr('x', 150).attr('y', +40).attr('class', 'explanation').style("font-size","10px").attr("dy", "1em").text("Source: Office fédral de la Statistique 2014 http://www.bfs.admin.ch/, Site web du parlement Suisse 2014 http://www.parlament.ch").call(wrap, 250);
+svg.append('text').attr('x', - width / 2).attr('y', - height / 2 - 50).attr('class', 'explanation').attr("dy", "1em").text("Les femmes sont un groupe démographique très sous-représenté au parlement.").call(wrap, 300);
+			
+	
+d3.tsv("data.tsv", data_load_f, function(error, data) {
+  var path = svg.datum(data).selectAll("path .population")
+      .data(pie)
+    .enter().append("path")
+      //.attr("fill", function(d, i) { return color(i); })
+      .attr("d", arc)
+      .each(function(d) { this._current = d; }); // store the initial angles
+
+	var path_par = svg.datum(data).selectAll("path .parlement")
+      .data(pie_par)
+    .enter().append("path")
+      //.attr("fill", function(d, i) { return color(i); })
+      .attr("d", arc_par)
+      .each(function(d) { this._current = d; }); // store the initial angles
+	
+	//ADD TOOLTIPS
+	/*svg.selectAll("path").data(data)
+	  .append("svg:title")
+		.text(function(d) { return d["title"]; });*/
+	path.data(data)
+	.attr("fill", function(d) { return d["color"]; })
+	  .append("svg:title")
+		.text(function(d) { return (d["title"] + ": " + Math.round((d["sex_pop"] + d["age_pop"] + d["langue_pop"])*10)/10 + "%"); });
+		//return (d.wholename + ": " + Math.round((d.end - d.start)*10)/10 + "%");
+	path_par.data(data)
+	.attr("fill", function(d) { return d["color"]; })
+	  .append("svg:title")
+		.text(function(d) { return (d["title"] + ": " + Math.round((d["sex_parlement"] + d["age_parlement"] + d["langue_parlement"])*10)/10 + "%"); });
+	  
+	//FIRST LEGEND
+	var legendRectSize = 18;
+	var legendSpacing = 4;
+	var value_type = "sex_proportion";
+	
+	var legend = svg.selectAll('.legend')
+  .data(data)
+  .enter()
+  .append('g')
+  .attr('class', 'legend').filter(function(d) { return d["type"] === value_type;})
+  .attr('transform', function(d, i) {
+    var height_temp = legendRectSize + legendSpacing;
+    var offset =  height_temp * color.domain().length / 2;
+    var horz = -2 * legendRectSize + width / 2 -50;
+    var vert = i * height_temp - offset - height / 2 - 50;
+    return 'translate(' + horz + ',' + vert + ')';
+  });
+	
+
+legend.append('rect').filter(function(d) { return d["type"] === value_type;})
+  .attr('width', legendRectSize)
+  .attr('height', legendRectSize)
+  .attr("fill", function(d) { return d["color"]; })
+  .style('stroke', function(d) { return d["color"]; });
+  
+  legend.append('text').filter(function(d) { return d["type"] === value_type;})
+  .attr('x', legendRectSize + legendSpacing)
+  .attr('y', legendRectSize - legendSpacing)
+  .text(function(d) { return d["title"]; });
+  
+  
+  d3.selectAll("input")
+      .on("change", change);
+
+  var timeout = setTimeout(function() {
+    d3.select("input[value=\"age_pop\"]").property("checked", true).each(change);
+  }, 2000);
+
+  function change() {
+	if (this.value === "sex") {  
+		var value_pop = "sex_pop";
+		var value_par = "sex_parlement";
+		var value_type = "sex_proportion";
+		svg.selectAll('.explanation').remove();
+		svg.append('text').attr('x', 150).attr('y', +10).attr('class', 'explanation').style("font-size","10px").attr("dy", "1em").text("Passez la souris sur le graphique pour avoir des details").call(wrap, 250);
+		svg.append('text').attr('x', 150).attr('y', +40).attr('class', 'explanation').style("font-size","10px").attr("dy", "1em").text("Source: Office fédral de la Statistique 2014 http://www.bfs.admin.ch/, Site web du parlement Suisse 2014 http://www.parlament.ch").call(wrap, 250);
+		svg.append('text').attr('x', - width / 2).attr('y', - height / 2 - 50).attr('class', 'explanation').attr("dy", "1em").text("Les femmes sont un groupe démographique très sous-représenté au parlement.").call(wrap, 300);
+	}else if (this.value === "age") {
+		var value_pop = "age_pop";
+		var value_par = "age_parlement";
+		var value_type = "age_proportion";
+		svg.selectAll('.explanation').remove();
+		svg.append('text').attr('x', 150).attr('y', +10).attr('class', 'explanation').style("font-size","10px").attr("dy", "1em").text("Passez la souris sur le graphique pour avoir des details").call(wrap, 250);
+		svg.append('text').attr('x', 150).attr('y', +40).attr('class', 'explanation').style("font-size","10px").attr("dy", "1em").text("Source: Office fédral de la Statistique 2014 http://www.bfs.admin.ch/, Site web du parlement Suisse 2014 http://www.parlament.ch").call(wrap, 250);
+		svg.append('text').attr('x', - width / 2).attr('y', - height / 2 - 50).attr('class', 'explanation').attr("dy", "1em").text("Il reste difficile pour les jeunes de rentrer au parlement, et la grande majorité des sièges vont aux 40-64 ans.").call(wrap, 300);
+	}else{
+		var value_pop = "langue_pop";
+		var value_par = "langue_parlement";
+		var value_type = "langue_proportion";
+		svg.selectAll('.explanation').remove();
+		svg.append('text').attr('x', 150).attr('y', +10).attr('class', 'explanation').style("font-size","10px").attr("dy", "1em").text("Passez la souris sur le graphique pour avoir des details").call(wrap, 250);
+		svg.append('text').attr('x', 150).attr('y', +40).attr('class', 'explanation').style("font-size","10px").attr("dy", "1em").text("Source: Office fédral de la Statistique 2014 http://www.bfs.admin.ch/, Site web du parlement Suisse 2014 http://www.parlament.ch").call(wrap, 250);
+		svg.append('text').attr('x', - width / 2).attr('y', - height / 2 - 50).attr('class', 'explanation').attr("dy", "1em").text("Aucun parlementaire ne déclare sa langue de travail comme étant l'italien, par contre la population francophone est bien représentée.").call(wrap, 300);
+	}
+	clearTimeout(timeout);
+		pie.value(function(d) { return d[value_pop]; }); // change the value function
+		pie_par.value(function(d) { return d[value_par]; }); // change the value function
+		path = path.data(pie); // compute the new angles
+		path_par = path_par.data(pie_par); // compute the new angles
+		path.transition().duration(750).attrTween("d", arcTween); // redraw the arcs
+		path_par.transition().duration(750).attrTween("d", arcTween_par); // redraw the arcs
+		
+		//ADD LEGEND
+
+	svg.selectAll('.legend').remove()	
+		
+	var legendRectSize = 18;
+	var legendSpacing = 4;
+	
+	var legend = svg.selectAll('.legend')
+  .data(data)
+  .enter()
+  .append('g')
+  .attr('class', 'legend').filter(function(d) { return d["type"] === value_type;})
+  .attr('transform', function(d, i) {
+    var height_temp = legendRectSize + legendSpacing;
+    var offset =  height_temp * color.domain().length / 2;
+    var horz = -2 * legendRectSize + width / 2 -50;
+    var vert = i * height_temp - offset - height / 2 - 50;
+    return 'translate(' + horz + ',' + vert + ')';
+  });
+	
+
+legend.append('rect').filter(function(d) { return d["type"] === value_type;})
+  .attr('width', legendRectSize)
+  .attr('height', legendRectSize)
+  .attr("fill", function(d) { return d["color"]; })
+  .style('stroke', function(d) { return d["color"]; });
+  
+  legend.append('text').filter(function(d) { return d["type"] === value_type;})
+  .attr('x', legendRectSize + legendSpacing)
+  .attr('y', legendRectSize - legendSpacing)
+  .text(function(d) { return d["title"]; });
+  }
+});
+
+function data_load_f(d) {
+  return {
+    title: d.title, // convert "Year" column to Date
+    type: d.type,
+    sex_pop: +d.sex_pop,
+	sex_parlement: +d.sex_parlement,
+    age_pop: +d.age_pop, // convert "Length" column to number
+	age_parlement: +d.age_parlement, // convert "Length" column to number
+	langue_pop: +d.langue_pop,
+	langue_parlement: +d.langue_parlement,
+	color: d.color
+  };
+}
+
+// Store the displayed angles in _current.
+// Then, interpolate from _current to the new angles.
+// During the transition, _current is updated in-place by d3.interpolate.
+function arcTween(a) {
+  var i = d3.interpolate(this._current, a);
+  this._current = i(0);
+  return function(t) {
+    return arc(i(t));
+  };
+}
+function arcTween_par(a) {
+  var i = d3.interpolate(this._current, a);
+  this._current = i(0);
+  return function(t) {
+    return arc_par(i(t));
+  };
+}
+
+// ADD THE TEXT ON THE SVG
+svg.append("text")
+	.text("Parlement")
+	.attr("font-family", "sans-serif")
+	.attr("text-anchor", "middle")
+	.attr("font-size", "20px")
+	.attr("fill", "black")
+	.attr("transform", "translate(0,20)");
+	
+svg.append("text")
+	.text("Population")
+	.attr("font-family", "sans-serif")
+	.attr("text-anchor", "middle")
+	.attr("font-size", "20px")
+	.attr("fill", "black")
+	.attr("transform", "translate(0,-240)");
+
+function wrap(text, width) {
+    var text = d3.select(this)[0][0],
+        words = text.text().split(/\s+/).reverse(),
+        word,
+        line = [],
+        lineNumber = 0,
+        lineHeight = 1.4, 
+        y = text.attr("y"),
+		x = text.attr("x"),
+        dy = parseFloat(text.attr("dy")),
+        tspan = text.text(null).append("tspan").attr("x", x).attr("y", y).attr("dy", dy + "em");
+		
+    while (word = words.pop()) {
+      line.push(word);
+      tspan.text(line.join(" "));
+      if (tspan.node().getComputedTextLength() > width) {
+        line.pop();
+        tspan.text(line.join(" "));
+        line = [word];
+        tspan = text.append("tspan").attr("x", x).attr("y", y).attr("dy", ++lineNumber * lineHeight + dy + "em").text(word);
+      };
+    };  
+};
+	
+</script>
